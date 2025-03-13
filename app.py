@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from textblob import TextBlob
 import re
+from googletrans import Translator
 
 # Configuración de la página
 st.set_page_config(
@@ -83,26 +84,58 @@ def contar_palabras(texto):
     
     return contador_ordenado, palabras_filtradas
 
-# Función para procesar el texto con TextBlob (versión simplificada)
+# Inicializar el traductor
+translator = Translator()
+
+# Función para traducir texto del español al inglés
+def traducir_texto(texto):
+    try:
+        traduccion = translator.translate(texto, src='es', dest='en')
+        return traduccion.text
+    except Exception as e:
+        st.error(f"Error al traducir: {e}")
+        return texto  # Devolver el texto original si falla la traducción
+
+# Función para procesar el texto con TextBlob (versión con traducción)
 def procesar_texto(texto):
-    blob = TextBlob(texto)
+    # Guardar el texto original
+    texto_original = texto
+    
+    # Traducir el texto al inglés para mejor análisis
+    texto_ingles = traducir_texto(texto)
+    
+    # Analizar el texto traducido con TextBlob
+    blob = TextBlob(texto_ingles)
     
     # Análisis de sentimiento (esto no requiere corpus adicionales)
     sentimiento = blob.sentiment.polarity
     subjetividad = blob.sentiment.subjectivity
     
-    # Extraer frases de manera simplificada
-    frases = [frase.strip() for frase in re.split(r'[.!?]+', texto) if frase.strip()]
+    # Extraer frases de manera simplificada (del texto original)
+    frases_originales = [frase.strip() for frase in re.split(r'[.!?]+', texto_original) if frase.strip()]
     
-    # Contar palabras con nuestra función simplificada
-    contador_palabras, palabras = contar_palabras(texto)
+    # Extraer frases del texto traducido
+    frases_traducidas = [frase.strip() for frase in re.split(r'[.!?]+', texto_ingles) if frase.strip()]
+    
+    # Combinar frases originales y traducidas
+    frases_combinadas = []
+    for i in range(min(len(frases_originales), len(frases_traducidas))):
+        frases_combinadas.append({
+            "original": frases_originales[i],
+            "traducido": frases_traducidas[i]
+        })
+    
+    # Contar palabras con nuestra función simplificada (en el texto traducido)
+    contador_palabras, palabras = contar_palabras(texto_ingles)
     
     return {
         "sentimiento": sentimiento,
         "subjetividad": subjetividad,
-        "frases": frases,
+        "frases": frases_combinadas,
         "contador_palabras": contador_palabras,
-        "palabras": palabras
+        "palabras": palabras,
+        "texto_original": texto_original,
+        "texto_traducido": texto_ingles
     }
 
 # Función para crear visualizaciones usando componentes nativos de Streamlit
@@ -143,25 +176,42 @@ def crear_visualizaciones(resultados):
             palabras_top = dict(list(resultados["contador_palabras"].items())[:10])
             st.bar_chart(palabras_top)
     
+    # Mostrar texto traducido
+    st.subheader("Texto Traducido")
+    with st.expander("Ver traducción completa"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Texto Original (Español):**")
+            st.text(resultados["texto_original"])
+        with col2:
+            st.markdown("**Texto Traducido (Inglés):**")
+            st.text(resultados["texto_traducido"])
+    
     # Análisis de frases
     st.subheader("Frases detectadas")
     if resultados["frases"]:
-        for i, frase in enumerate(resultados["frases"][:10], 1):
-            if frase:
-                try:
-                    blob_frase = TextBlob(frase)
-                    sentimiento = blob_frase.sentiment.polarity
-                    
-                    if sentimiento > 0.05:
-                        emoji = "😊"
-                    elif sentimiento < -0.05:
-                        emoji = "😟"
-                    else:
-                        emoji = "😐"
-                    
-                    st.write(f"{i}. {emoji} *\"{frase}\"* (Sentimiento: {sentimiento:.2f})")
-                except:
-                    st.write(f"{i}. *\"{frase}\"*")
+        for i, frase_dict in enumerate(resultados["frases"][:10], 1):
+            frase_original = frase_dict["original"]
+            frase_traducida = frase_dict["traducido"]
+            
+            try:
+                blob_frase = TextBlob(frase_traducida)
+                sentimiento = blob_frase.sentiment.polarity
+                
+                if sentimiento > 0.05:
+                    emoji = "😊"
+                elif sentimiento < -0.05:
+                    emoji = "😟"
+                else:
+                    emoji = "😐"
+                
+                st.write(f"{i}. {emoji} **Original:** *\"{frase_original}\"*")
+                st.write(f"   **Traducción:** *\"{frase_traducida}\"* (Sentimiento: {sentimiento:.2f})")
+                st.write("---")
+            except:
+                st.write(f"{i}. **Original:** *\"{frase_original}\"*")
+                st.write(f"   **Traducción:** *\"{frase_traducida}\"*")
+                st.write("---")
     else:
         st.write("No se detectaron frases.")
 
