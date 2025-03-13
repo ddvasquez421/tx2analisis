@@ -1,46 +1,64 @@
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from textblob import TextBlob
-from googletrans import Translator
+from PIL import Image
+import nltk
+from wordcloud import WordCloud
+from collections import Counter
 
-translator = Translator()
-st.title('Uso de textblob')
+# Descargar recursos necesarios de NLTK
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
-st.subheader("Por favor escribe en el campo de texto la frase que deseas analizar")
-with st.sidebar:
-               st.subheader("Polaridad y Subjetividad")
-               ("""
-                Polaridad: Indica si el sentimiento expresado en el texto es positivo, negativo o neutral. 
-                Su valor oscila entre -1 (muy negativo) y 1 (muy positivo), con 0 representando un sentimiento neutral.
-                
-               Subjetividad: Mide cuánto del contenido es subjetivo (opiniones, emociones, creencias) frente a objetivo
-               (hechos). Va de 0 a 1, donde 0 es completamente objetivo y 1 es completamente subjetivo.
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
-                 """
-               ) 
+# Configuración de la página
+st.set_page_config(
+    page_title="Analizador de Texto Multimodal",
+    page_icon="📊",
+    layout="wide"
+)
 
+# Título y descripción
+st.title("📝 Analizador de Texto Multimodal con TextBlob")
+st.markdown("""
+Esta aplicación utiliza TextBlob para analizar texto en diferentes modalidades:
+- Análisis de sentimiento y subjetividad
+- Extracción de frases y palabras clave
+- Visualización de frecuencia de palabras
+- Análisis de archivos de texto
+""")
 
-with st.expander('Analizar Polaridad y Subjetividad en un texto'):
-    text1 = st.text_area('Escribe por favor: ')
-    if text1:
+# Barra lateral
+st.sidebar.title("Opciones")
+modo = st.sidebar.selectbox(
+    "Selecciona el modo de entrada:",
+    ["Texto directo", "Archivo de texto", "Imagen con texto (OCR)"]
+)
 
-        #translation = translator.translate(text1, src="es", dest="en")
-        #trans_text = translation.text
-        #blob = TextBlob(trans_text)
-        blob = TextBlob(text1)
-       
-        
-        st.write('Polarity: ', round(blob.sentiment.polarity,2))
-        st.write('Subjectivity: ', round(blob.sentiment.subjectivity,2))
-        x=round(blob.sentiment.polarity,2)
-        if x >= 0.5:
-            st.write( 'Es un sentimiento Positivo 😊')
-        elif x <= -0.5:
-            st.write( 'Es un sentimiento Negativo 😔')
-        else:
-            st.write( 'Es un sentimiento Neutral 😐')
-
-with st.expander('Corrección en inglés'):
-       text2 = st.text_area('Escribe por favor: ',key='4')
-       if text2:
-          blob2=TextBlob(text2)
-          st.write((blob2.correct())) 
+# Función para procesar el texto con TextBlob
+def procesar_texto(texto):
+    blob = TextBlob(texto)
+    
+    # Análisis de sentimiento
+    sentimiento = blob.sentiment.polarity
+    subjetividad = blob.sentiment.subjectivity
+    
+    # Extraer frases
+    frases = list(blob.sentences)
+    
+    # Palabras más comunes (excluyendo stopwords)
+    from nltk.corpus import stopwords
+    stop_words = set(stopwords.words('spanish') + stopwords.words('english'))
+    palabras = [word.lower() for word in blob.words if word.lower() not in stop_words and len(word) > 2]
+    contador_palabras = Counter(palabras)
+    
+    # Reconocimiento de entidades (como sustituto de NER)
+    #
